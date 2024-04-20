@@ -1,28 +1,30 @@
-# This workflow will build a golang project
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
-
-name: Go
+name: Release Go Binary
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  release:
+    types: [created]
 
 jobs:
 
-  build:
+  releases-matrix:
+    name: Release Go Binary
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, windows, darwin]
+        goarch: [amd64, arm64]
+        exclude:  
+          - goarch: arm64
+            goos: windows 
     steps:
     - uses: actions/checkout@v3
-
-    - name: Set up Go
-      uses: actions/setup-go@v4
+    - uses: wangyoucao577/go-release-action@v1.50
       with:
-        go-version: '1.22'
-
-    - name: Build
-      run: make build
-
-    - name: Test
-      run: go test -v ./...
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        goos: ${{ matrix.goos }}
+        goarch: ${{ matrix.goarch }}
+        project_path: "./"
+        binary_name: "deeplx"
+        executable_compression: "upx"
+        build_command: |  
+          make build
