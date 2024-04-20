@@ -1,0 +1,14 @@
+version: '3.8'
+services:
+  deeplx:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GOOS: linux
+        GOARCH: arm64
+    image: ycvk:deeplx
+    ports:
+      - "62155:62155"
+    container_name: deeplx
+    restart: unless-stopped
