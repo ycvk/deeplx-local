@@ -2,6 +2,7 @@ package service
 
 import (
 	"deeplx-local/domain"
+	"log"
 	"sync"
 	"time"
 )
@@ -29,12 +30,31 @@ func NewLoadBalancer(service *DeepLXService) TranslateService {
 }
 
 func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse {
-	server := lb.getServer()
-	start := time.Now()
-	response := lb.deepLXService.GetTranslateData(trReq)
-	elapsed := time.Since(start)
-	go lb.updateResponseTime(server, elapsed)
-	return response
+	count := 0
+	for {
+		count++
+		if count == 10 {
+			break
+		}
+
+		var trResult domain.TranslateResponse
+		server := lb.getServer()
+		start := time.Now()
+		response, err := lb.deepLXService.client.R().SetBody(trReq).SetSuccessResult(&trResult).Post(server.URL)
+		elapsed := time.Since(start)
+		go lb.updateResponseTime(server, elapsed)
+
+		if err != nil {
+			log.Printf("error: %s\n", err)
+			continue
+		}
+		response.Body.Close()
+
+		if trResult.Code == 200 {
+			return trResult
+		}
+	}
+	return domain.TranslateResponse{}
 }
 
 func (lb *LoadBalancer) getServer() *Server {
