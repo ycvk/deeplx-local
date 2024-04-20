@@ -31,13 +31,14 @@ func NewLoadBalancer(service *DeepLXService) TranslateService {
 
 func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse {
 	count := 0
+	trResult := domain.TranslateResponse{}
+
 	for {
 		count++
 		if count == 10 {
 			break
 		}
 
-		var trResult domain.TranslateResponse
 		server := lb.getServer()
 		start := time.Now()
 		response, err := lb.deepLXService.client.R().SetBody(trReq).SetSuccessResult(&trResult).Post(server.URL)
@@ -54,7 +55,7 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 			return trResult
 		}
 	}
-	return domain.TranslateResponse{}
+	return trResult
 }
 
 func (lb *LoadBalancer) getServer() *Server {
