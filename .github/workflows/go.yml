@@ -20,7 +20,7 @@ jobs:
     - uses: actions/checkout@v3
     - uses: wangyoucao577/go-release-action@v1.50
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: ${{ secrets.MY_TOKEN }}
         goos: ${{ matrix.goos }}
         goarch: ${{ matrix.goarch }}
         project_path: "./"
