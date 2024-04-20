@@ -8,10 +8,15 @@
 初步实现了负载均衡，延迟越低响应越快的接口会被优先使用。
 
 ### 使用方法
-#### 本地运行
+#### 编译运行
 1. 填入`url.txt`内的 deeplx 的翻译接口，可以只填`ip:port`，也可以填写完整的url。
 2. `go build -o deeplx .`来编译。
 3. 启动编译后的程序，翻译地址为 `http://localhost:62155/translate` ，端口可自行修改。
+
+#### 本地运行
+1. 在Release中下载对应平台的二进制文件。
+2. 在可执行文件的目录下，新建`url.txt`, 填入`url.txt`内的 deeplx 的翻译接口，可以只填`ip:port`，也可以填写完整的url。
+3. 启动程序，翻译地址为 `http://localhost:62155/translate`
 
 #### Docker Compose运行
 1. 填入`url.txt`内的 deeplx 的翻译接口，可以只填`ip:port`，也可以填写完整的url。
