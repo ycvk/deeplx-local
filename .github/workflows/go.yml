@@ -22,7 +22,4 @@ jobs:
           github_token: ${{ secrets.MY_TOKEN }}
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
-          project_path: "./"
           binary_name: "deeplx"
-          build_command: "go build -o deeplx ."
-          compress_assets: "OFF"
