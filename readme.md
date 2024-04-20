@@ -18,4 +18,4 @@
 2. `docker compose up -d`来构建并启动容器，`docker-compose.yml`中的配置和端口可自行更改。
 
 #### Docker 运行
-`docker run -itd -p 62155:62155 neccen/deeplx-local:0.0.1`
+`docker run -itd -p 62155:62155 neccen/deeplx-local:latest`
