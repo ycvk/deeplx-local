@@ -1,7 +1,9 @@
 package service
 
 import (
+	"context"
 	"deeplx-local/domain"
+	"golang.org/x/sync/errgroup"
 	"log"
 	"sync"
 	"time"
@@ -30,32 +32,50 @@ func NewLoadBalancer(service *DeepLXService) TranslateService {
 }
 
 func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse {
-	count := 0
-	trResult := domain.TranslateResponse{}
+	ctx, cancelFunc := context.WithCancel(context.Background())
+	defer cancelFunc()
+	resultChan := make(chan domain.TranslateResponse, 5)
 
-	for {
-		count++
-		if count == 10 {
-			break
-		}
+	eg, egCtx := errgroup.WithContext(ctx)
+	for i := 0; i < 5; i++ {
 
-		server := lb.getServer()
-		start := time.Now()
-		response, err := lb.deepLXService.client.R().SetBody(trReq).SetSuccessResult(&trResult).Post(server.URL)
-		elapsed := time.Since(start)
-		go lb.updateResponseTime(server, elapsed)
+		eg.Go(func() error {
+			server := lb.getServer()
+			var trResult domain.TranslateResponse
+			start := time.Now()
+			response, err := lb.deepLXService.client.R().SetContext(egCtx).SetBody(trReq).SetSuccessResult(&trResult).Post(server.URL)
+			elapsed := time.Since(start)
+			lb.updateResponseTime(server, elapsed)
 
-		if err != nil {
-			log.Printf("error: %s\n", err)
-			continue
-		}
-		response.Body.Close()
+			if err != nil {
+				return err
+			}
+			response.Body.Close()
 
-		if trResult.Code == 200 {
-			return trResult
-		}
+			if trResult.Code == 200 {
+				resultChan <- trResult
+			}
+			return nil
+		})
 	}
-	return trResult
+
+	go func() {
+		_ = eg.Wait()
+		if _, ok := <-resultChan; !ok { // 如果通道已经关闭，直接返回
+			return
+		}
+		close(resultChan)
+	}()
+
+	select {
+	case r := <-resultChan:
+		defer cancelFunc()
+		return r
+	case <-ctx.Done():
+		log.Println("all requests failed")
+	}
+
+	return domain.TranslateResponse{}
 }
 
 func (lb *LoadBalancer) getServer() *Server {
