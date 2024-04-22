@@ -20,16 +20,20 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - run: go install github.com/mitchellh/gox@latest # 安装 gox
+      - run: make gox-linux
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
           file: ./Dockerfile
+          platforms: linux/arm64,linux/amd64 # 需要的平台
+          #tags: ${{ steps.meta.outputs.tags }}
           tags: neccen/deeplx-local:latest
-      - name: Update repo description
-        uses: peter-evans/dockerhub-description@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: neccen/deeplx-local
+#      - name: Update repo description
+#        uses: peter-evans/dockerhub-description@v3
+#        with:
+#          username: ${{ secrets.DOCKERHUB_USERNAME }}
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#          repository: neccen/deeplx-local
