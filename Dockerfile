@@ -1,6 +1,6 @@
 # 使用适合Go应用的基础镜像
 FROM golang:1.22-alpine as builder
-#RUN apk update && apk add --no-cache upx && rm -rf /var/cache/apk/*
+RUN apk update && apk add --no-cache upx && rm -rf /var/cache/apk/*
 RUN apk add make
 
 # 设置工作目录
@@ -15,6 +15,7 @@ RUN go mod tidy
 # 构建应用程序
 #RUN CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -o deeplx .
 RUN make build-all
+RUN upx -6 build/deeplx_linux_*
 
 FROM alpine as final
 ARG TARGETOS
