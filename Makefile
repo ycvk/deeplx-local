@@ -6,10 +6,14 @@ build:
 	@go build -o deeplx .
 
 gox-linux:
-	gox -gcflags="all=-N -l" -ldflags "-s -w -X 'main.GO_VERSION=$(go version)'" -osarch="linux/amd64 linux/arm64" -output="build/deeplx_{{.OS}}_{{.Arch}}"
+	@go mod tidy
+	@rm -f ./build/deeplx_* || true
+	@gox -gcflags="all=-N -l" -ldflags "-s -w" -osarch="linux/amd64 linux/arm64" -output="build/deeplx_{{.OS}}_{{.Arch}}"
 
 gox-all:
-	gox -gcflags="all=-N -l" -ldflags "-s -w -X 'main.GO_VERSION=$(go version)'" -osarch="darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64" -output="build/deeplx_{{.OS}}_{{.Arch}}"
+	@go mod tidy
+	@rm -f ./build/deeplx_* || true
+	@gox -gcflags="all=-N -l" -ldflags "-s -w" -osarch="darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64" -output="build/deeplx_{{.OS}}_{{.Arch}}"
 
 docker:
 	@go mod tidy
