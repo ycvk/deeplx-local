@@ -20,8 +20,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - run: go install github.com/mitchellh/gox@latest # 安装 gox
-      - run: make gox-linux
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
