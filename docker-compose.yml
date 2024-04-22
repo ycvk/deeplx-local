@@ -7,7 +7,7 @@ services:
       args:
         GOOS: linux
         GOARCH: amd64
-    image: ycvk:deeplx
+    image: neccen/deeplx-local:latest
     ports:
       - "62155:62155"
     container_name: deeplx

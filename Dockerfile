@@ -14,7 +14,7 @@ RUN go mod tidy
 RUN CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} go build -o deeplx .
 
 # 运行阶段
-FROM alpine:latest
+FROM alpine as final
 WORKDIR /root/
 COPY --from=builder /app/deeplx .
 # 确保 url.txt 文件也被复制到容器中
