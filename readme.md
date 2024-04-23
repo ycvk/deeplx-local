@@ -24,3 +24,8 @@
 
 #### Docker 运行
 `docker run -itd -p 62155:62155 neccen/deeplx-local:latest`
+
+
+### Bob翻译插件
+看到有人提问Bob如何用上此翻译，我手撸了一个，
+配套的Bob翻译插件请看 [ycvk/deeplx-local-bobplugin: 用于自建deeplx服务的bob翻译插件](https://github.com/ycvk/deeplx-local-bobplugin)
