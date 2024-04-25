@@ -5,6 +5,7 @@ go 1.22
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/imroc/req/v3 v3.43.3
+	github.com/samber/lo v1.39.0
 	golang.org/x/sync v0.7.0
 )
 

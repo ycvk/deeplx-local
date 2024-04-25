@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	client   = req.NewClient().SetTimeout(time.Second)
+	client   = req.NewClient().SetTimeout(2 * time.Second)
 	validReq = domain.TranslateRequest{
 		Text:       "I love you",
 		SourceLang: "EN",
