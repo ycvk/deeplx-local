@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"deeplx-local/cron"
 	"deeplx-local/domain"
+	"deeplx-local/service"
 	"fmt"
 	"github.com/imroc/req/v3"
 	"golang.org/x/sync/errgroup"
@@ -24,6 +26,9 @@ var (
 		SourceLang: "EN",
 		TargetLang: "ZH",
 	}
+	hunterKey   = os.Getenv("hunter_api_key")
+	quakeKey    = os.Getenv("360_api_key")
+	scanService service.ScanService
 )
 
 // getValidURLs 从文件中读取并处理URL
@@ -33,19 +38,21 @@ func getValidURLs() []string {
 		log.Fatal(err)
 	}
 
-	urls := strings.Split(string(content), "\n")
-	for i := range urls {
-		if !strings.HasSuffix(urls[i], "/translate") {
-			urls[i] += "/translate"
+	var urls []string
+	if len(content) == 0 {
+		log.Println("url.txt is empty")
+		s := getScanService()
+		scan := s.Scan()
+		if len(scan) == 0 {
+			log.Fatalln("url.txt is empty and scan failed")
+			return nil
 		}
-		if !strings.HasPrefix(urls[i], "http") {
-			urls[i] = "http://" + urls[i]
-		}
+		urls = processUrls(scan)
+	} else {
+		urls = strings.Split(string(content), "\n")
 	}
-	// 去重
-	distinctURLs(&urls)
-	// 保存处理后的URL
-	os.WriteFile("url.txt", []byte(strings.Join(urls, "\n")), 0600)
+	// 处理URL
+	urls = processUrls(urls)
 
 	eg := errgroup.Group{}
 	validList := make([]string, 0, len(urls))
@@ -65,6 +72,23 @@ func getValidURLs() []string {
 
 	log.Printf("available urls count: %d\n", len(validList))
 	return validList
+}
+
+func processUrls(urls []string) []string {
+	for i := range urls {
+		urls[i] = strings.TrimSpace(urls[i])
+		if !strings.HasSuffix(urls[i], "/translate") {
+			urls[i] += "/translate"
+		}
+		if !strings.HasPrefix(urls[i], "http") {
+			urls[i] = "http://" + urls[i]
+		}
+	}
+	// 去重
+	distinctURLs(&urls)
+	// 保存处理后的URL
+	os.WriteFile("url.txt", []byte(strings.Join(urls, "\n")), 0600)
+	return urls
 }
 
 // distinctURLs 去重
@@ -120,4 +144,33 @@ func exit(engine *http.Server) {
 	exec.Command("killall", "main", strconv.Itoa(os.Getpid())).Run()
 	// 自杀
 	exec.Command("kill", "-9", strconv.Itoa(os.Getpid())).Run()
+}
+
+func getScanService() service.ScanService {
+	if scanService != nil {
+		return scanService
+	}
+	var cli = req.NewClient().SetTimeout(15 * time.Second)
+	if hunterKey != "" {
+		return service.NewYingTuScanService(cli, hunterKey)
+	}
+	if quakeKey != "" {
+		return service.NewQuake360ScanService(cli, quakeKey)
+	}
+	log.Println("未找到有效的API Key")
+	return nil
+}
+
+func autoScan() {
+	scanService := getScanService()
+	if scanService == nil {
+		return
+	}
+	cron.StartTimer(2, func() {
+		scan := scanService.Scan()
+		distinctURLs(&scan)
+		urls := processUrls(scan)
+		os.WriteFile("url.txt", []byte(strings.Join(urls, "\n")), 0600)
+		exec.Command("kill", "-1", strconv.Itoa(os.Getpid())).Run() // 重启
+	})
 }

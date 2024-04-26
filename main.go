@@ -5,8 +5,11 @@ import (
 	"deeplx-local/web"
 	"errors"
 	"github.com/gin-gonic/gin"
+	"github.com/ycvk/endless"
 	"log"
 	"net/http"
+	"os"
+	"time"
 )
 
 func main() {
@@ -21,17 +24,20 @@ func main() {
 	lxHandler := web.NewDeepLXHandler(balancerService)
 	lxHandler.RegisterRoutes(r)
 
-	// 启动服务
-	server := &http.Server{
-		Addr:    "0.0.0.0:62155",
-		Handler: r,
-	}
 	go func() {
-		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Println("web服务启动失败: ", err)
+		for {
+			time.Sleep(2 * time.Second)
+			log.Println(os.Getpid())
 		}
 	}()
 
-	// 监听退出
-	exit(server)
+	autoScan()
+	// 启动服务
+	go func() {
+		if err := endless.ListenAndServe("0.0.0.0:62155", r); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal("web服务启动失败: ", err)
+		}
+	}()
+
+	select {}
 }
