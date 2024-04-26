@@ -49,5 +49,13 @@ services:
 `docker run -itd -p 62155:62155 -v /url.txt文件目录:/usr/local/bin/url.txt -e 360_api_key="xxxxx" neccen/deeplx-local:latest`
 
 极简命令: 
-##### 会自动使用我内置的爬取的deeplx翻译接口 
+**会自动使用我内置的爬取的deeplx翻译接口**
+
+
+
 `docker run -itd -p 62155:62155 neccen/deeplx-local:latest`
+
+
+### Bob翻译插件
+看到有人提问Bob如何用上此翻译，我手撸了一个，
+配套的Bob翻译插件请看 [ycvk/deeplx-local-bobplugin: 用于自建deeplx服务的bob翻译插件](https://github.com/ycvk/deeplx-local-bobplugin)
