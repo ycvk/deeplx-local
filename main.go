@@ -8,11 +8,16 @@ import (
 	"github.com/ycvk/endless"
 	"log"
 	"net/http"
-	"os"
-	"time"
 )
 
 func main() {
+	initServer() // 初始化服务
+	autoScan()   // 自动扫描
+	exitV1()     // 监听退出
+	select {}
+}
+
+func initServer() {
 	// 从文件中读取并处理URL
 	urLs := getValidURLs()
 
@@ -25,19 +30,8 @@ func main() {
 	lxHandler.RegisterRoutes(r)
 
 	go func() {
-		for {
-			time.Sleep(2 * time.Second)
-			log.Println(os.Getpid())
-		}
-	}()
-
-	autoScan()
-	// 启动服务
-	go func() {
 		if err := endless.ListenAndServe("0.0.0.0:62155", r); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatal("web服务启动失败: ", err)
 		}
 	}()
-
-	select {}
 }

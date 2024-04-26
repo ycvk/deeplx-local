@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"deeplx-local/channel"
 	"deeplx-local/cron"
 	"deeplx-local/domain"
 	"deeplx-local/service"
@@ -135,7 +136,12 @@ func exit(engine *http.Server) {
 		if err := engine.Shutdown(ctx); err != nil {
 			fmt.Println("web服务退出失败: ", err)
 		}
-		quit <- true
+		if sig == syscall.SIGHUP {
+			channel.Restart <- sig
+			quit <- true
+		} else {
+			quit <- true
+		}
 	}()
 	<-quit
 	fmt.Println("服务 PID 为: ", os.Getpid())
@@ -144,6 +150,20 @@ func exit(engine *http.Server) {
 	exec.Command("killall", "main", strconv.Itoa(os.Getpid())).Run()
 	// 自杀
 	exec.Command("kill", "-9", strconv.Itoa(os.Getpid())).Run()
+}
+
+func exitV1() {
+	osSig := make(chan os.Signal, 1)
+	quit := make(chan bool, 1)
+
+	signal.Notify(osSig, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		sig := <-osSig
+		fmt.Println("收到退出信号: ", sig)
+		channel.Quit <- sig
+		quit <- true
+	}()
+	<-quit
 }
 
 func getScanService() service.ScanService {
@@ -166,11 +186,11 @@ func autoScan() {
 	if scanService == nil {
 		return
 	}
-	cron.StartTimer(2, func() {
+	cron.StartTimer(time.Hour*24*2, func() {
 		scan := scanService.Scan()
-		distinctURLs(&scan)
-		urls := processUrls(scan)
-		os.WriteFile("url.txt", []byte(strings.Join(urls, "\n")), 0600)
-		exec.Command("kill", "-1", strconv.Itoa(os.Getpid())).Run() // 重启
+		distinctURLs(&scan)                                             // 去重
+		urls := processUrls(scan)                                       // 处理URL
+		os.WriteFile("url.txt", []byte(strings.Join(urls, "\n")), 0600) // 保存
+		exec.Command("kill", "-1", strconv.Itoa(os.Getpid())).Run()     // 重启
 	})
 }

@@ -1,17 +1,26 @@
 package cron
 
-import "time"
+import (
+	"deeplx-local/channel"
+	"log"
+	"time"
+)
 
-func StartTimer(day uint, f func()) {
+func StartTimer(t time.Duration, f func()) {
 	go func() {
 		for {
-			f()
 			now := time.Now()
-			// 计算下一个零点
-			next := now.Add(time.Hour * 24 * time.Duration(day))
+			next := now.Add(t)
 			next = time.Date(next.Year(), next.Month(), next.Day(), 0, 0, 0, 0, next.Location())
-			t := time.NewTimer(next.Sub(now))
-			<-t.C
+			timer := time.NewTimer(next.Sub(now))
+			select {
+			case <-channel.Quit:
+				log.Println("定时任务已退出")
+				timer.Stop()
+				return
+			case <-timer.C:
+				f()
+			}
 		}
 	}()
 }
