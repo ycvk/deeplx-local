@@ -3,7 +3,7 @@ package service
 import (
 	"context"
 	"deeplx-local/domain"
-	"golang.org/x/sync/errgroup"
+	"github.com/sourcegraph/conc/pool"
 	"log"
 	"sync"
 	"time"
@@ -36,14 +36,17 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 	defer cancelFunc()
 	resultChan := make(chan domain.TranslateResponse, 5)
 
-	eg, egCtx := errgroup.WithContext(ctx)
+	contextPool := pool.New().WithContext(ctx).WithMaxGoroutines(5)
 	for i := 0; i < 5; i++ {
-
-		eg.Go(func() error {
+		contextPool.Go(func(ctx context.Context) error {
 			server := lb.getServer()
 			var trResult domain.TranslateResponse
 			start := time.Now()
-			response, err := lb.deepLXService.client.R().SetContext(egCtx).SetBody(trReq).SetSuccessResult(&trResult).Post(server.URL)
+			response, err := lb.deepLXService.client.R().
+				SetContext(ctx).
+				SetBody(trReq).
+				SetSuccessResult(&trResult).
+				Post(server.URL)
 			elapsed := time.Since(start)
 			lb.updateResponseTime(server, elapsed)
 
@@ -52,15 +55,16 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 			}
 			response.Body.Close()
 
-			if trResult.Code == 200 {
+			if trResult.Code == 200 && len(trResult.Data) > 0 {
 				resultChan <- trResult
+				cancelFunc()
 			}
 			return nil
 		})
 	}
 
 	go func() {
-		_ = eg.Wait()
+		_ = contextPool.Wait()
 		if _, ok := <-resultChan; !ok { // 如果通道已经关闭，直接返回
 			return
 		}
@@ -74,7 +78,6 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 	case <-ctx.Done():
 		log.Println("all requests failed")
 	}
-
 	return domain.TranslateResponse{}
 }
 
