@@ -79,7 +79,7 @@ func (q *Quake360ScanService) Scan() []string {
 	const address = "https://quake.360.net/api/v3/search/quake_service"
 	reqParam := make(map[string]string)
 	reqParam["query"] = q.searchParam
-	reqParam["size"] = "100"
+	reqParam["size"] = "200"
 	reqParam["start"] = "0"
 	var quakeResp domain.Quake360Response
 	response, err := q.client.R().

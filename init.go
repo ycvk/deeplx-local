@@ -8,7 +8,7 @@ import (
 	"deeplx-local/service"
 	"fmt"
 	"github.com/imroc/req/v3"
-	"golang.org/x/sync/errgroup"
+	"github.com/sourcegraph/conc/pool"
 	"log"
 	"net/http"
 	"os"
@@ -55,21 +55,18 @@ func getValidURLs() []string {
 	// 处理URL
 	urls = processUrls(urls)
 
-	eg := errgroup.Group{}
 	validList := make([]string, 0, len(urls))
 
 	// 并发检查URL可用性
+	p := pool.New().WithMaxGoroutines(30)
 	for _, url := range urls {
-		eg.Go(func() error {
+		p.Go(func() {
 			if availability, err := checkURLAvailability(url); err == nil && availability {
 				validList = append(validList, url)
 			}
-			return err
 		})
 	}
-	if err := eg.Wait(); err != nil {
-		log.Printf("error: %s\n", err)
-	}
+	p.Wait()
 
 	log.Printf("available urls count: %d\n", len(validList))
 	return validList
