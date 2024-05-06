@@ -8,8 +8,9 @@
 初步实现了负载均衡，延迟越低响应越快的接口会被优先使用。
 
 ### 可选参数
-- `360_api_key`：quake360翻译的api_key，可用于每日自动爬取更多的翻译接口。
-- `hunter_api_key`：鹰图的api_key，可用于每日自动爬取更多的翻译接口。
+- `360_api_key`：[quake360](https://quake.360.net/quake/#/personal?tab=message)的api_key，可用于每日自动爬取更多的翻译接口。（有每日免费次数）
+- `hunter_api_key`：[鹰图](https://hunter.qianxin.com/home/myInfo)的api_key，可用于每日自动爬取更多的翻译接口。(有每日免费次数)
+- 群友提到的`fofa`不想加，不送免费额度啊，本来想用[Cl0udG0d/Fofa-hack: 非付费会员，fofa数据采集工具](https://github.com/Cl0udG0d/Fofa-hack)偷个懒，发现不传自己的auth会有20条搜索的限制，懒得整了
 
 ### 使用方法
 #### 编译运行
@@ -54,3 +55,8 @@ services:
 
 
 `docker run -itd -p 62155:62155 neccen/deeplx-local:latest`
+
+
+### Bob翻译插件
+看到有人提问Bob如何用上此翻译，我手撸了一个，
+配套的Bob翻译插件请看 [ycvk/deeplx-local-bobplugin: 用于自建deeplx服务的bob翻译插件](https://github.com/ycvk/deeplx-local-bobplugin)
