@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	client   = req.NewClient().SetTimeout(2 * time.Second)
+	client   = req.NewClient().SetTimeout(3 * time.Second)
 	validReq = domain.TranslateRequest{
 		Text:       "I love you",
 		SourceLang: "EN",
@@ -69,6 +69,7 @@ func getValidURLs() []string {
 	p.Wait()
 
 	log.Printf("available urls count: %d\n", len(validList))
+	//os.WriteFile("url.txt", []byte(strings.Join(validList, "\n")), 0600) // 保存
 	return validList
 }
 
@@ -76,7 +77,11 @@ func processUrls(urls []string) []string {
 	for i := range urls {
 		urls[i] = strings.TrimSpace(urls[i])
 		if !strings.HasSuffix(urls[i], "/translate") {
-			urls[i] += "/translate"
+			if strings.HasSuffix(urls[i], "/") {
+				urls[i] += "translate"
+			} else {
+				urls[i] += "/translate"
+			}
 		}
 		if !strings.HasPrefix(urls[i], "http") {
 			urls[i] = "http://" + urls[i]
@@ -185,9 +190,27 @@ func autoScan() {
 	}
 	cron.StartTimer(time.Hour*24*2, func() {
 		scan := scanService.Scan()
-		distinctURLs(&scan)                                             // 去重
-		urls := processUrls(scan)                                       // 处理URL
-		os.WriteFile("url.txt", []byte(strings.Join(urls, "\n")), 0600) // 保存
-		exec.Command("kill", "-1", strconv.Itoa(os.Getpid())).Run()     // 重启
+		distinctURLs(&scan)                                         // 去重
+		urls := processUrls(scan)                                   // 处理URL
+		writeFile("url.txt", urls)                                  // 保存
+		exec.Command("kill", "-1", strconv.Itoa(os.Getpid())).Run() // 重启
 	})
+}
+
+func writeFile(path string, urls []string) {
+	// 打开文件，如果文件不存在则创建
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
+	if err != nil {
+		log.Println("文件打开失败", err)
+		return
+	}
+	defer file.Close()
+
+	// 要写入的内容,增量保存
+	text := "\n" + strings.Join(urls, "\n")
+
+	// 写入文件
+	if _, err = file.WriteString(text); err != nil {
+		log.Println("写入文件失败", err)
+	}
 }

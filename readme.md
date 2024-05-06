@@ -49,5 +49,8 @@ services:
 `docker run -itd -p 62155:62155 -v /url.txt文件目录:/usr/local/bin/url.txt -e 360_api_key="xxxxx" neccen/deeplx-local:latest`
 
 极简命令: 
-##### 会自动使用我内置的爬取的deeplx翻译接口 
+**会自动使用我内置的爬取的deeplx翻译接口**
+
+
+
 `docker run -itd -p 62155:62155 neccen/deeplx-local:latest`
