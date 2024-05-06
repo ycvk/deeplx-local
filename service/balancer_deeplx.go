@@ -32,7 +32,7 @@ func NewLoadBalancer(service *DeepLXService) TranslateService {
 }
 
 func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse {
-	ctx, cancelFunc := context.WithCancel(context.Background())
+	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancelFunc()
 	resultChan := make(chan domain.TranslateResponse, 5)
 
@@ -63,19 +63,23 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 		})
 	}
 
-	go func() {
-		_ = contextPool.Wait()
-		if _, ok := <-resultChan; !ok { // 如果通道已经关闭，直接返回
-			return
-		}
-		close(resultChan)
-	}()
+	//go func() {
+	//	_ = contextPool.Wait()
+	//	if _, ok := <-resultChan; !ok { // 如果通道已经关闭，直接返回
+	//		return
+	//	}
+	//	close(resultChan)
+	//}()
 
 	select {
 	case r := <-resultChan:
-		defer cancelFunc()
+		defer func() {
+			cancelFunc()
+			close(resultChan)
+		}()
 		return r
 	case <-ctx.Done():
+		close(resultChan)
 		log.Println("all requests failed")
 	}
 	return domain.TranslateResponse{}
