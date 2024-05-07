@@ -4,10 +4,15 @@ import (
 	"context"
 	"deeplx-local/domain"
 	"github.com/sourcegraph/conc/pool"
+	"github.com/sourcegraph/conc/stream"
 	"log"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
+
+const maxLength = 4096
 
 type Server struct {
 	URL           string
@@ -20,6 +25,7 @@ type LoadBalancer struct {
 	Servers       []*Server
 	mutex         sync.Mutex
 	deepLXService *DeepLXService
+	re            *regexp.Regexp
 }
 
 // NewLoadBalancer 负载均衡 装饰器模式包了一层service
@@ -28,10 +34,61 @@ func NewLoadBalancer(service *DeepLXService) TranslateService {
 	for i, url := range *service.validList {
 		servers[i] = &Server{URL: url, Weight: 1, CurrentWeight: 1}
 	}
-	return &LoadBalancer{Servers: servers, deepLXService: service}
+	return &LoadBalancer{Servers: servers, deepLXService: service, re: regexp.MustCompile(`[^.!?]+[.!?]`)}
 }
 
 func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse {
+	text := trReq.Text
+	textLength := len(text)
+
+	if textLength <= maxLength {
+		return lb.sendRequest(trReq)
+	}
+
+	var textParts []string
+	var currentPart string
+
+	sentences := lb.re.FindAllString(text, -1)
+
+	for _, sentence := range sentences {
+		if len(currentPart)+len(sentence) <= maxLength {
+			currentPart += sentence
+		} else {
+			textParts = append(textParts, currentPart)
+			currentPart = sentence
+		}
+	}
+
+	if currentPart != "" {
+		textParts = append(textParts, currentPart)
+	}
+
+	var results = make([]string, 0, len(textParts))
+	s := stream.New()
+
+	for _, part := range textParts {
+		s.Go(func() stream.Callback {
+			req := domain.TranslateRequest{
+				Text:       part,
+				SourceLang: trReq.SourceLang,
+				TargetLang: trReq.TargetLang,
+			}
+			res := lb.sendRequest(req)
+			return func() {
+				results = append(results, res.Data)
+			}
+		})
+	}
+
+	s.Wait()
+
+	return domain.TranslateResponse{
+		Code: 200,
+		Data: strings.Join(results, ""),
+	}
+}
+
+func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.TranslateResponse {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancelFunc()
 	resultChan := make(chan domain.TranslateResponse, 5)

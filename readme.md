@@ -7,6 +7,12 @@
 
 初步实现了负载均衡，延迟越低响应越快的接口会被优先使用。
 
+### 一键启动
+`docker run -itd -p 8080:62155 neccen/deeplx-local:latest`
+
+
+翻译地址：`http://localhost:8080`
+
 ### 可选参数
 - `360_api_key`：[quake360](https://quake.360.net/quake/#/personal?tab=message)的api_key，可用于每日自动爬取更多的翻译接口。（有每日免费次数）
 - `hunter_api_key`：[鹰图](https://hunter.qianxin.com/home/myInfo)的api_key，可用于每日自动爬取更多的翻译接口。(有每日免费次数)
@@ -45,11 +51,11 @@ services:
 ```
 
 #### Docker 运行
-完整命令:
+##### 完整命令:
 
 `docker run -itd -p 62155:62155 -v /url.txt文件目录:/usr/local/bin/url.txt -e 360_api_key="xxxxx" neccen/deeplx-local:latest`
 
-极简命令: 
+##### 极简命令: 
 **会自动使用我内置的爬取的deeplx翻译接口**
 
 
