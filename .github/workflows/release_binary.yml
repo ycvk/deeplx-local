@@ -1,25 +1,28 @@
-name: Release Go Binary
+name: Release Windows Binary
 
 on:
-  release:
-    types: [ created ]
+  push:
+    branches:
+      - windows
+    tags:
+      - v*
 
 jobs:
-  releases-matrix:
-    name: Release Go Binary
+  release:
+    name: Release Windows Binary
     runs-on: ubuntu-latest
+
     strategy:
       matrix:
-        goos: [ linux, windows, darwin ]
-        goarch: [ amd64, arm64 ]
-        exclude:
-          - goarch: arm64
-            goos: windows
+        goarch: [amd64, arm64]
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: wangyoucao577/go-release-action@v1
         with:
           github_token: ${{ secrets.MY_TOKEN }}
-          goos: ${{ matrix.goos }}
+          goos: windows
           goarch: ${{ matrix.goarch }}
           binary_name: "deeplx"
+          ldflags: -H=windowsgui
