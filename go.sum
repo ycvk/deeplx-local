@@ -30,6 +30,7 @@ github.com/go-playground/universal-translator v0.18.1 h1:Bcnm0ZwsGyWbCzImXv+pAJn
 github.com/go-playground/universal-translator v0.18.1/go.mod h1:xekY+UJKNuX9WP91TpwSH2VMlDf28Uj24BCp08ZFTUY=
 github.com/go-playground/validator/v10 v10.20.0 h1:K9ISHbSaI0lyB2eWMPJo+kOS/FBExVwjEviJTixqxL8=
 github.com/go-playground/validator/v10 v10.20.0/go.mod h1:dbuPbCMFw/DrkbEynArYaCwl3amGuJotoKCe95atGMM=
+github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 h1:tfuBGBXKqDEevZMzYi5KSi8KkcZtzBcTgAUUtapy0OI=
 github.com/go-task/slim-sprig/v3 v3.0.0 h1:sUs3vkvUymDpBKi3qH1YSqBQk9+9D/8M2mN1vB6EwHI=
 github.com/go-task/slim-sprig/v3 v3.0.0/go.mod h1:W848ghGpv3Qj3dhTPRyJypKRiqCdHZiAzKg9hl15HA8=
 github.com/goccy/go-json v0.10.2 h1:CrxCmQqYDkv1z7lO7Wbh2HN93uovUHgrECaO5ZrCXAU=
@@ -106,6 +107,14 @@ github.com/ugorji/go/codec v1.2.12 h1:9LC83zGrHhuUA9l16C9AHXAqEV/2wBQ4nkvumAE65E
 github.com/ugorji/go/codec v1.2.12/go.mod h1:UNopzCgEMSXjBc6AOMqYvWC1ktqTAfzJZUZgYf6w6lg=
 github.com/ycvk/endless v0.0.0-20240425132555-71b31d16be07 h1:A2rqcS6q0CdGyzAiSJrodyAcmRknggK/CoADl3luPBA=
 github.com/ycvk/endless v0.0.0-20240425132555-71b31d16be07/go.mod h1:zzOu1a0/ntowiZdsZB7KHvqxtw6jUGpSCB2v5ojjUOc=
+github.com/ycvk/priority-queue v0.0.0-20240506012911-94b7c33bc0ae h1:gBfbhB6n4543GtdM3xbOTa4pZU2WmCQNCDhrMXuvx3w=
+github.com/ycvk/priority-queue v0.0.0-20240506012911-94b7c33bc0ae/go.mod h1:qGHGN8rGG0Sw+YzB9zH3N/bY1k1ewc0jTprYFonoqFU=
+github.com/ycvk/priority-queue v0.0.0-20240506022751-cc9f1e660e49 h1:WyzPqDYbS+hjFkrys8wTKw2XSF5Wyy6xBlxr0MBI2lg=
+github.com/ycvk/priority-queue v0.0.0-20240506022751-cc9f1e660e49/go.mod h1:qGHGN8rGG0Sw+YzB9zH3N/bY1k1ewc0jTprYFonoqFU=
+github.com/ycvk/priority-queue v0.1.1 h1:RbRzQL2T8qCGc0ctTifQQZFgEhbH66CKG3rqiO9eJOY=
+github.com/ycvk/priority-queue v0.1.1/go.mod h1:qGHGN8rGG0Sw+YzB9zH3N/bY1k1ewc0jTprYFonoqFU=
+github.com/ycvk/priority-queue v0.1.2 h1:o867BjZohYDDrDOO0K8CMSD3OY+NmUwCQEvbTuCx3gM=
+github.com/ycvk/priority-queue v0.1.2/go.mod h1:qGHGN8rGG0Sw+YzB9zH3N/bY1k1ewc0jTprYFonoqFU=
 go.uber.org/mock v0.4.0 h1:VcM4ZOtdbR4f6VXfiOpwpVJDL6lCReaZ6mw31wqh7KU=
 go.uber.org/mock v0.4.0/go.mod h1:a6FSlNadKUHUa9IP5Vyt1zh4fC7uAwxMutEAscFbkZc=
 go.uber.org/multierr v1.11.0 h1:blXXJkSxSSfBVBlC76pxqeO+LN3aDfLQo+309xJstO0=
