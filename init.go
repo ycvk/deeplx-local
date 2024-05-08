@@ -6,6 +6,7 @@ import (
 	"deeplx-local/cron"
 	"deeplx-local/domain"
 	"deeplx-local/service"
+	"errors"
 	"fmt"
 	"github.com/imroc/req/v3"
 	"github.com/sourcegraph/conc/pool"
@@ -32,9 +33,32 @@ var (
 	scanService service.ScanService
 )
 
+// readFile
+func readFile(filename string) ([]byte, error) {
+	_, err := os.Stat(filename)
+	if err != nil {
+		// file no exit, create it and return nil
+		if errors.Is(err, os.ErrNotExist) {
+			log.Println("url.txt is not exist")
+			return nil, os.WriteFile(filename, []byte{}, 0600)
+		}
+
+		// Other error
+		return nil, err
+	}
+
+	// file exist, read it
+	content, err := os.ReadFile("url.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return content, nil
+}
+
 // getValidURLs 从文件中读取并处理URL
 func getValidURLs() []string {
-	content, err := os.ReadFile("url.txt")
+	content, err := readFile("url.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -172,15 +196,28 @@ func getScanService() service.ScanService {
 	if scanService != nil {
 		return scanService
 	}
-	var cli = req.NewClient().SetTimeout(15 * time.Second)
+
+	if hunterKey == "" && quakeKey == "" {
+		log.Println("未提供有YingTu 或 360的API Key")
+		return nil
+	}
+
+	var (
+		cli      = req.NewClient().SetTimeout(15 * time.Second)
+		services []service.ScanService
+	)
+
 	if hunterKey != "" {
-		return service.NewYingTuScanService(cli, hunterKey)
+		services = append(services, service.NewYingTuScanService(cli, hunterKey))
 	}
+
 	if quakeKey != "" {
-		return service.NewQuake360ScanService(cli, quakeKey)
+		services = append(services, service.NewQuake360ScanService(cli, quakeKey))
 	}
-	log.Println("未找到有效的API Key")
-	return nil
+
+	// 返回组合扫描服务
+	return service.NewCombinedScanService(services...)
+
 }
 
 func autoScan() {

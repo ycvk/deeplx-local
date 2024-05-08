@@ -8,7 +8,6 @@ require (
 	github.com/samber/lo v1.39.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/ycvk/endless v0.0.0-20240425132555-71b31d16be07
-	github.com/ycvk/priority-queue v0.1.2
 )
 
 require (
