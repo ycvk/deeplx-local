@@ -9,12 +9,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/imroc/req/v3"
+	lop "github.com/samber/lo/parallel"
 	"github.com/sourcegraph/conc/pool"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -98,19 +100,20 @@ func getValidURLs() []string {
 }
 
 func processUrls(urls []string) []string {
-	for i := range urls {
-		urls[i] = strings.TrimSpace(urls[i])
-		if !strings.HasSuffix(urls[i], "/translate") {
-			if strings.HasSuffix(urls[i], "/") {
-				urls[i] += "translate"
-			} else {
-				urls[i] += "/translate"
-			}
+	// 使用正则表达式处理 URL 后缀
+	suffixPattern := regexp.MustCompile(`(?:/translate)?/?$`)
+	// 使用正则表达式处理 URL 前缀
+	prefixPattern := regexp.MustCompile("^(http|https)://")
+
+	urls = lop.Map(urls, func(url string, _ int) string {
+		u := strings.TrimSpace(url)
+		u = suffixPattern.ReplaceAllString(u, "/translate")
+		if prefixPattern.MatchString(u) {
+			return u
 		}
-		if !strings.HasPrefix(urls[i], "http") {
-			urls[i] = "http://" + urls[i]
-		}
-	}
+		return "http://" + u
+	})
+
 	// 去重
 	distinctURLs(&urls)
 	// 保存处理后的URL

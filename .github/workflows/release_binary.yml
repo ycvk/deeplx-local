@@ -24,4 +24,3 @@ jobs:
           goarch: ${{ matrix.goarch }}
           binary_name: "deeplx"
           extra_files: url.txt
-          executable_compression: upx --best
