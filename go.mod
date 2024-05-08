@@ -4,7 +4,7 @@ go 1.22
 
 require (
 	github.com/gin-gonic/gin v1.10.0
-	github.com/imroc/req/v3 v3.43.3
+	github.com/imroc/req/v3 v3.43.4
 	github.com/samber/lo v1.39.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/ycvk/endless v0.0.0-20240425132555-71b31d16be07
