@@ -2,10 +2,8 @@ name: Release Windows Binary
 
 on:
   push:
-    branches:
-      - windows
     tags:
-      - v*
+      - windows-v*
 
 jobs:
   release:
@@ -26,3 +24,6 @@ jobs:
           goarch: ${{ matrix.goarch }}
           binary_name: "deeplx"
           ldflags: -H=windowsgui
+          executable_compression: upx --ultra-brute --no-lzma
+          extra_files: url.txt
+          overwrite: true
