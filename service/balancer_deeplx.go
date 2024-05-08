@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"deeplx-local/domain"
+	"github.com/imroc/req/v3"
+	lop "github.com/samber/lo/parallel"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/sourcegraph/conc/stream"
 	"log"
@@ -22,19 +24,22 @@ type Server struct {
 }
 
 type LoadBalancer struct {
-	Servers       []*Server
-	mutex         sync.Mutex
-	deepLXService *DeepLXService
-	re            *regexp.Regexp
+	Servers []*Server
+	mutex   sync.Mutex
+	re      *regexp.Regexp
+	client  *req.Client
 }
 
-// NewLoadBalancer 负载均衡 装饰器模式包了一层service
-func NewLoadBalancer(service *DeepLXService) TranslateService {
-	servers := make([]*Server, len(*service.validList))
-	for i, url := range *service.validList {
-		servers[i] = &Server{URL: url, Weight: 1, CurrentWeight: 1}
+// NewLoadBalancer 负载均衡
+func NewLoadBalancer(vlist *[]string) TranslateService {
+	servers := lop.Map(*vlist, func(item string, index int) *Server {
+		return &Server{URL: item, Weight: 1, CurrentWeight: 1}
+	})
+	return &LoadBalancer{
+		Servers: servers,
+		client:  req.NewClient().SetTimeout(2 * time.Second),
+		re:      regexp.MustCompile(`[^.!?]+[.!?]`),
 	}
-	return &LoadBalancer{Servers: servers, deepLXService: service, re: regexp.MustCompile(`[^.!?]+[.!?]`)}
 }
 
 func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse {
@@ -68,12 +73,12 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 
 	for _, part := range textParts {
 		s.Go(func() stream.Callback {
-			req := domain.TranslateRequest{
+			transReq := domain.TranslateRequest{
 				Text:       part,
 				SourceLang: trReq.SourceLang,
 				TargetLang: trReq.TargetLang,
 			}
-			res := lb.sendRequest(req)
+			res := lb.sendRequest(transReq)
 			return func() {
 				results = append(results, res.Data)
 			}
@@ -99,7 +104,7 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 			server := lb.getServer()
 			var trResult domain.TranslateResponse
 			start := time.Now()
-			response, err := lb.deepLXService.client.R().
+			response, err := lb.client.R().
 				SetContext(ctx).
 				SetBody(trReq).
 				SetSuccessResult(&trResult).

@@ -6,14 +6,17 @@ import (
 	"deeplx-local/cron"
 	"deeplx-local/domain"
 	"deeplx-local/service"
+	"errors"
 	"fmt"
 	"github.com/imroc/req/v3"
+	lop "github.com/samber/lo/parallel"
 	"github.com/sourcegraph/conc/pool"
 	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"os/signal"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -32,9 +35,32 @@ var (
 	scanService service.ScanService
 )
 
+// readFile
+func readFile(filename string) ([]byte, error) {
+	_, err := os.Stat(filename)
+	if err != nil {
+		// file no exit, create it and return nil
+		if errors.Is(err, os.ErrNotExist) {
+			log.Println("url.txt is not exist")
+			return nil, os.WriteFile(filename, []byte{}, 0600)
+		}
+
+		// Other error
+		return nil, err
+	}
+
+	// file exist, read it
+	content, err := os.ReadFile("url.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return content, nil
+}
+
 // getValidURLs 从文件中读取并处理URL
 func getValidURLs() []string {
-	content, err := os.ReadFile("url.txt")
+	content, err := readFile("url.txt")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -74,19 +100,20 @@ func getValidURLs() []string {
 }
 
 func processUrls(urls []string) []string {
-	for i := range urls {
-		urls[i] = strings.TrimSpace(urls[i])
-		if !strings.HasSuffix(urls[i], "/translate") {
-			if strings.HasSuffix(urls[i], "/") {
-				urls[i] += "translate"
-			} else {
-				urls[i] += "/translate"
-			}
+	// 使用正则表达式处理 URL 后缀
+	suffixPattern := regexp.MustCompile(`(?:/translate)?/?$`)
+	// 使用正则表达式处理 URL 前缀
+	prefixPattern := regexp.MustCompile("^(http|https)://")
+
+	urls = lop.Map(urls, func(url string, _ int) string {
+		u := strings.TrimSpace(url)
+		u = suffixPattern.ReplaceAllString(u, "/translate")
+		if prefixPattern.MatchString(u) {
+			return u
 		}
-		if !strings.HasPrefix(urls[i], "http") {
-			urls[i] = "http://" + urls[i]
-		}
-	}
+		return "http://" + u
+	})
+
 	// 去重
 	distinctURLs(&urls)
 	// 保存处理后的URL
@@ -172,15 +199,28 @@ func getScanService() service.ScanService {
 	if scanService != nil {
 		return scanService
 	}
-	var cli = req.NewClient().SetTimeout(15 * time.Second)
+
+	if hunterKey == "" && quakeKey == "" {
+		log.Println("未提供有YingTu 或 360的API Key")
+		return nil
+	}
+
+	var (
+		cli      = req.NewClient().SetTimeout(15 * time.Second)
+		services []service.ScanService
+	)
+
 	if hunterKey != "" {
-		return service.NewYingTuScanService(cli, hunterKey)
+		services = append(services, service.NewYingTuScanService(cli, hunterKey))
 	}
+
 	if quakeKey != "" {
-		return service.NewQuake360ScanService(cli, quakeKey)
+		services = append(services, service.NewQuake360ScanService(cli, quakeKey))
 	}
-	log.Println("未找到有效的API Key")
-	return nil
+
+	// 返回组合扫描服务
+	return service.NewCombinedScanService(services...)
+
 }
 
 func autoScan() {
