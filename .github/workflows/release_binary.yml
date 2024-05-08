@@ -24,6 +24,6 @@ jobs:
           goarch: ${{ matrix.goarch }}
           binary_name: "deeplx"
           ldflags: -H=windowsgui
-          executable_compression: upx --ultra-brute --no-lzma
+          executable_compression: upx --best
           extra_files: url.txt
           overwrite: true
