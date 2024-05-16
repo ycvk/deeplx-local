@@ -20,18 +20,20 @@ type Server struct {
 	URL           string
 	Weight        int64
 	CurrentWeight int64
+	isAvailable   bool
 }
 
 type LoadBalancer struct {
 	Servers []*Server
 	re      *regexp.Regexp
 	client  *req.Client
+	index   uint32
 }
 
 // NewLoadBalancer 负载均衡
 func NewLoadBalancer(vlist *[]string) TranslateService {
 	servers := lop.Map(*vlist, func(item string, index int) *Server {
-		return &Server{URL: item, Weight: 1, CurrentWeight: 1}
+		return &Server{URL: item, Weight: 1, CurrentWeight: 1, isAvailable: true}
 	})
 	return &LoadBalancer{
 		Servers: servers,
@@ -101,14 +103,11 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 		contextPool.Go(func(ctx context.Context) error {
 			server := lb.getServer()
 			var trResult domain.TranslateResponse
-			start := time.Now()
 			response, err := lb.client.R().
 				SetContext(ctx).
 				SetBody(trReq).
 				SetSuccessResult(&trResult).
 				Post(server.URL)
-			elapsed := time.Since(start)
-			lb.updateResponseTime(server, elapsed)
 
 			if err != nil {
 				return err
@@ -118,6 +117,8 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 			if trResult.Code == 200 && len(trResult.Data) > 0 {
 				resultChan <- trResult
 				cancelFunc()
+			} else {
+				server.isAvailable = false
 			}
 			return nil
 		})
@@ -146,37 +147,12 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 }
 
 func (lb *LoadBalancer) getServer() *Server {
-	var bestServer *Server
-	var total int64
+	index := atomic.AddUint32(&lb.index, 1) - 1
+	server := lb.Servers[index%uint32(len(lb.Servers))]
 
-	for _, server := range lb.Servers {
-		currentWeight := atomic.AddInt64(&server.CurrentWeight, server.Weight)
-		atomic.AddInt64(&total, server.Weight)
-
-		if bestServer == nil || currentWeight > atomic.LoadInt64(&bestServer.CurrentWeight) {
-			bestServer = server
-		}
+	for !server.isAvailable {
+		index = atomic.AddUint32(&lb.index, 1) - 1
+		server = lb.Servers[index%uint32(len(lb.Servers))]
 	}
-
-	if bestServer != nil {
-		atomic.AddInt64(&bestServer.CurrentWeight, -total)
-	}
-
-	return bestServer
-}
-
-func (lb *LoadBalancer) updateResponseTime(server *Server, responseTime time.Duration) {
-	prevWeight := atomic.LoadInt64(&server.Weight)
-	newWeight := calculateWeight(prevWeight, responseTime)
-	atomic.StoreInt64(&server.Weight, newWeight)
-}
-
-// 一个更加平滑的权重计算, 指数移动平均(Exponential Moving Average, EMA)
-// 使用EMA, 可以根据服务器的历史响应时间来计算当前的权重,这样可以避免权重变化过于剧烈
-// k 是一个平滑因子 (0,1)
-// 当responseTime很小时,k接近1,这意味着新的权重值主要由当前的响应时间决定
-// 当responseTime很大时,k接近0,这意味着新的权重值主要由历史权重值决定
-func calculateWeight(prevWeight int64, responseTime time.Duration) int64 {
-	k := 2.0 / (1 + float64(responseTime)/float64(time.Second))
-	return int64(float64(prevWeight)*k + (1-k)*float64(time.Second)/float64(responseTime+1))
+	return server
 }
