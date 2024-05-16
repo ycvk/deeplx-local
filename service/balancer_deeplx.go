@@ -10,7 +10,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,14 +18,12 @@ const maxLength = 4096
 
 type Server struct {
 	URL           string
-	Weight        int
-	CurrentWeight int
-	ResponseTime  time.Duration
+	Weight        int64
+	CurrentWeight int64
 }
 
 type LoadBalancer struct {
 	Servers []*Server
-	mutex   sync.Mutex
 	re      *regexp.Regexp
 	client  *req.Client
 }
@@ -148,32 +146,37 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 }
 
 func (lb *LoadBalancer) getServer() *Server {
-	lb.mutex.Lock()
-	defer lb.mutex.Unlock()
-
 	var bestServer *Server
-	total := 0
+	var total int64
 
 	for _, server := range lb.Servers {
-		server.CurrentWeight += server.Weight
-		total += server.Weight
+		currentWeight := atomic.AddInt64(&server.CurrentWeight, server.Weight)
+		atomic.AddInt64(&total, server.Weight)
 
-		if bestServer == nil || server.CurrentWeight > bestServer.CurrentWeight {
+		if bestServer == nil || currentWeight > atomic.LoadInt64(&bestServer.CurrentWeight) {
 			bestServer = server
 		}
 	}
 
 	if bestServer != nil {
-		bestServer.CurrentWeight -= total
+		atomic.AddInt64(&bestServer.CurrentWeight, -total)
 	}
 
 	return bestServer
 }
 
 func (lb *LoadBalancer) updateResponseTime(server *Server, responseTime time.Duration) {
-	lb.mutex.Lock()
-	defer lb.mutex.Unlock()
+	prevWeight := atomic.LoadInt64(&server.Weight)
+	newWeight := calculateWeight(prevWeight, responseTime)
+	atomic.StoreInt64(&server.Weight, newWeight)
+}
 
-	server.ResponseTime = responseTime
-	server.Weight = int(time.Second / (responseTime + 1))
+// 一个更加平滑的权重计算, 指数移动平均(Exponential Moving Average, EMA)
+// 使用EMA, 可以根据服务器的历史响应时间来计算当前的权重,这样可以避免权重变化过于剧烈
+// k 是一个平滑因子 (0,1)
+// 当responseTime很小时,k接近1,这意味着新的权重值主要由当前的响应时间决定
+// 当responseTime很大时,k接近0,这意味着新的权重值主要由历史权重值决定
+func calculateWeight(prevWeight int64, responseTime time.Duration) int64 {
+	k := 2.0 / (1 + float64(responseTime)/float64(time.Second))
+	return int64(float64(prevWeight)*k + (1-k)*float64(time.Second)/float64(responseTime+1))
 }
