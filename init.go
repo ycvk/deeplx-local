@@ -4,7 +4,7 @@ import (
 	"context"
 	"deeplx-local/channel"
 	"deeplx-local/cron"
-	"deeplx-local/domain"
+	"deeplx-local/pkg"
 	"deeplx-local/service"
 	"errors"
 	"fmt"
@@ -24,12 +24,7 @@ import (
 )
 
 var (
-	client   = req.NewClient().SetTimeout(3 * time.Second)
-	validReq = domain.TranslateRequest{
-		Text:       "I love you",
-		SourceLang: "EN",
-		TargetLang: "ZH",
-	}
+	client      = req.NewClient().SetTimeout(3 * time.Second)
 	hunterKey   = os.Getenv("hunter_api_key")
 	quakeKey    = os.Getenv("360_api_key")
 	scanService service.ScanService
@@ -87,7 +82,7 @@ func getValidURLs() []string {
 	p := pool.New().WithMaxGoroutines(30)
 	for _, url := range urls {
 		p.Go(func() {
-			if availability, err := checkURLAvailability(url); err == nil && availability {
+			if availability, err := pkg.CheckURLAvailability(client, url); err == nil && availability {
 				validList = append(validList, url)
 			}
 		})
@@ -136,18 +131,6 @@ func distinctURLs(urls *[]string) {
 			hashset[(*urls)[i]] = struct{}{}
 		}
 	}
-}
-
-// checkURLAvailability 检查URL是否可用
-func checkURLAvailability(url string) (bool, error) {
-	var result domain.TranslateResponse
-	response, err := client.R().SetBody(&validReq).SetSuccessResult(&result).Post(url)
-	if err != nil {
-		//log.Printf("error: url:[%s] %s\n", url, err)
-		return false, err
-	}
-	defer response.Body.Close()
-	return "我爱你" == result.Data, nil
 }
 
 // 监听退出

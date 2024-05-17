@@ -5,7 +5,7 @@ go 1.22
 require (
 	github.com/getlantern/systray v1.2.2
 	github.com/gin-gonic/gin v1.10.0
-	github.com/imroc/req/v3 v3.43.4
+	github.com/imroc/req/v3 v3.43.5
 	github.com/samber/lo v1.39.0
 	github.com/sourcegraph/conc v0.3.0
 	github.com/ycvk/endless v0.0.0-20240425132555-71b31d16be07
@@ -34,7 +34,7 @@ require (
 	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
-	github.com/google/pprof v0.0.0-20240507183855-6f11f98ebb1c // indirect
+	github.com/google/pprof v0.0.0-20240509144519-723abb6459b7 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
