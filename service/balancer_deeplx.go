@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"deeplx-local/domain"
+	"deeplx-local/pkg"
 	"github.com/imroc/req/v3"
 	lop "github.com/samber/lo/parallel"
 	"github.com/sourcegraph/conc/pool"
@@ -10,36 +11,46 @@ import (
 	"log"
 	"regexp"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
 )
 
-const maxLength = 4096
+const (
+	maxLength   = 4096
+	maxFailures = 3 //最大健康检查错误次数
+)
 
 type Server struct {
 	URL           string
-	Weight        int
-	CurrentWeight int
-	ResponseTime  time.Duration
+	Weight        int64
+	CurrentWeight int64
+	isAvailable   bool
+	failureCount  int
 }
 
 type LoadBalancer struct {
-	Servers []*Server
-	mutex   sync.Mutex
-	re      *regexp.Regexp
-	client  *req.Client
+	Servers            []*Server
+	re                 *regexp.Regexp
+	client             *req.Client
+	index              uint32
+	unavailableServers []*Server    // 不可用的服务器
+	healthCheck        *time.Ticker // 健康检查定时器
 }
 
 // NewLoadBalancer 负载均衡
 func NewLoadBalancer(vlist *[]string) TranslateService {
 	servers := lop.Map(*vlist, func(item string, index int) *Server {
-		return &Server{URL: item, Weight: 1, CurrentWeight: 1}
+		return &Server{URL: item, Weight: 1, CurrentWeight: 1, isAvailable: true}
 	})
-	return &LoadBalancer{
-		Servers: servers,
-		client:  req.NewClient().SetTimeout(2 * time.Second),
-		re:      regexp.MustCompile(`[^.!?]+[.!?]`),
+	lb := &LoadBalancer{
+		Servers:            servers,
+		client:             req.NewClient().SetTimeout(2 * time.Second),
+		re:                 regexp.MustCompile(`[^.!?。！？]+[.!?。！？]`), //还有一种方式是 [^.!?。！？\s]+[.!?。！？]?\s* 这样能分割得更细小，但感觉没必要
+		unavailableServers: make([]*Server, 0),
+		healthCheck:        time.NewTicker(time.Minute),
 	}
+	go lb.startHealthCheck() // 开启定时健康检查
+	return lb
 }
 
 func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse {
@@ -103,14 +114,11 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 		contextPool.Go(func(ctx context.Context) error {
 			server := lb.getServer()
 			var trResult domain.TranslateResponse
-			start := time.Now()
 			response, err := lb.client.R().
 				SetContext(ctx).
 				SetBody(trReq).
 				SetSuccessResult(&trResult).
 				Post(server.URL)
-			elapsed := time.Since(start)
-			lb.updateResponseTime(server, elapsed)
 
 			if err != nil {
 				return err
@@ -120,6 +128,9 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 			if trResult.Code == 200 && len(trResult.Data) > 0 {
 				resultChan <- trResult
 				cancelFunc()
+			} else {
+				server.isAvailable = false
+				lb.unavailableServers = append(lb.unavailableServers, server)
 			}
 			return nil
 		})
@@ -148,32 +159,35 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 }
 
 func (lb *LoadBalancer) getServer() *Server {
-	lb.mutex.Lock()
-	defer lb.mutex.Unlock()
+	index := atomic.AddUint32(&lb.index, 1) - 1
+	server := lb.Servers[index%uint32(len(lb.Servers))]
 
-	var bestServer *Server
-	total := 0
-
-	for _, server := range lb.Servers {
-		server.CurrentWeight += server.Weight
-		total += server.Weight
-
-		if bestServer == nil || server.CurrentWeight > bestServer.CurrentWeight {
-			bestServer = server
-		}
+	for !server.isAvailable {
+		index = atomic.AddUint32(&lb.index, 1) - 1
+		server = lb.Servers[index%uint32(len(lb.Servers))]
 	}
-
-	if bestServer != nil {
-		bestServer.CurrentWeight -= total
-	}
-
-	return bestServer
+	return server
 }
 
-func (lb *LoadBalancer) updateResponseTime(server *Server, responseTime time.Duration) {
-	lb.mutex.Lock()
-	defer lb.mutex.Unlock()
-
-	server.ResponseTime = responseTime
-	server.Weight = int(time.Second / (responseTime + 1))
+func (lb *LoadBalancer) startHealthCheck() {
+	for range lb.healthCheck.C {
+		for i := 0; i < len(lb.unavailableServers); i++ {
+			server := lb.unavailableServers[i]
+			flag, _ := pkg.CheckURLAvailability(lb.client, server.URL)
+			if flag {
+				server.isAvailable = true
+				server.failureCount = 0
+				copy(lb.unavailableServers[i:], lb.unavailableServers[i+1:])
+				lb.unavailableServers = lb.unavailableServers[:len(lb.unavailableServers)-1]
+				i--
+			} else {
+				server.failureCount++
+				if server.failureCount >= maxFailures {
+					copy(lb.unavailableServers[i:], lb.unavailableServers[i+1:])
+					lb.unavailableServers = lb.unavailableServers[:len(lb.unavailableServers)-1]
+					i--
+				}
+			}
+		}
+	}
 }
