@@ -38,7 +38,7 @@ func NewLoadBalancer(vlist *[]string) TranslateService {
 	return &LoadBalancer{
 		Servers: servers,
 		client:  req.NewClient().SetTimeout(2 * time.Second),
-		re:      regexp.MustCompile(`[^.!?]+[.!?]`),
+		re:      regexp.MustCompile(`[^.!?。！？]+[.!?。！？]`), //还有一种方式是 [^.!?。！？\s]+[.!?。！？]?\s* 这样能分割得更细小，但感觉没必要
 	}
 }
 
