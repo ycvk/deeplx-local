@@ -24,6 +24,7 @@ import (
 )
 
 var (
+	urlPath     = "url.txt"
 	client      = req.NewClient().SetTimeout(3 * time.Second)
 	hunterKey   = os.Getenv("hunter_api_key")
 	quakeKey    = os.Getenv("360_api_key")
@@ -45,7 +46,7 @@ func readFile(filename string) ([]byte, error) {
 	}
 
 	// file exist, read it
-	content, err := os.ReadFile("url.txt")
+	content, err := os.ReadFile(urlPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -55,13 +56,13 @@ func readFile(filename string) ([]byte, error) {
 
 // getValidURLs 从文件中读取并处理URL
 func getValidURLs() []string {
-	content, err := readFile("url.txt")
+	content, err := readFile(urlPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	var urls []string
-	if len(content) == 0 {
+	if len(content) == 0 { // 文件为空 去扫描
 		log.Println("url.txt is empty")
 		s := getScanService()
 		scan := s.Scan()
@@ -69,12 +70,14 @@ func getValidURLs() []string {
 			log.Fatalln("url.txt is empty and scan failed")
 			return nil
 		}
+		// 处理URL
 		urls = processUrls(scan)
 	} else {
 		urls = strings.Split(string(content), "\n")
+		urls = processUrls(urls)
 	}
-	// 处理URL
-	urls = processUrls(urls)
+	// 保存处理后的URL
+	writeFileReplace(urlPath, urls)
 
 	validList := make([]string, 0, len(urls))
 
@@ -90,7 +93,6 @@ func getValidURLs() []string {
 	p.Wait()
 
 	log.Printf("available urls count: %d\n", len(validList))
-	//os.WriteFile("url.txt", []byte(strings.Join(validList, "\n")), 0600) // 保存
 	return validList
 }
 
@@ -111,8 +113,6 @@ func processUrls(urls []string) []string {
 
 	// 去重
 	distinctURLs(&urls)
-	// 保存处理后的URL
-	os.WriteFile("url.txt", []byte(strings.Join(urls, "\n")), 0600)
 	return urls
 }
 
@@ -213,14 +213,14 @@ func autoScan() {
 	}
 	cron.StartTimer(time.Hour*24*2, func() {
 		scan := scanService.Scan()
-		distinctURLs(&scan)                                         // 去重
 		urls := processUrls(scan)                                   // 处理URL
-		writeFile("url.txt", urls)                                  // 保存
+		writeFileIncremental(urlPath, urls)                         // 增量写入保存
 		exec.Command("kill", "-1", strconv.Itoa(os.Getpid())).Run() // 重启
 	})
 }
 
-func writeFile(path string, urls []string) {
+// writeFileIncremental 增量写入保存
+func writeFileIncremental(path string, urls []string) {
 	// 打开文件，如果文件不存在则创建
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0600)
 	if err != nil {
@@ -236,4 +236,10 @@ func writeFile(path string, urls []string) {
 	if _, err = file.WriteString(text); err != nil {
 		log.Println("写入文件失败", err)
 	}
+}
+
+// writeFileReplace 全量写入保存
+func writeFileReplace(path string, urls []string) {
+	// 保存处理后的URL
+	os.WriteFile(path, []byte(strings.Join(urls, "\n")), 0600)
 }

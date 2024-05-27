@@ -5,10 +5,10 @@ import (
 	"github.com/imroc/req/v3"
 )
 
-const validResp = "我爱你"
+const validResp = "你好"
 
 var validReq = domain.TranslateRequest{
-	Text:       "I love you",
+	Text:       "hello",
 	SourceLang: "EN",
 	TargetLang: "ZH",
 }

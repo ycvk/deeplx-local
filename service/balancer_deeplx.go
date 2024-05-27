@@ -16,8 +16,9 @@ import (
 )
 
 const (
-	maxLength   = 4096
-	maxFailures = 3 //最大健康检查错误次数
+	maxLength           = 4096
+	maxFailures         = 3 //最大健康检查错误次数
+	healthCheckInterval = time.Minute
 )
 
 type Server struct {
@@ -47,7 +48,7 @@ func NewLoadBalancer(vlist *[]string) TranslateService {
 		client:             req.NewClient().SetTimeout(2 * time.Second),
 		re:                 regexp.MustCompile(`[^.!?。！？]+[.!?。！？]`), //还有一种方式是 [^.!?。！？\s]+[.!?。！？]?\s* 这样能分割得更细小，但感觉没必要
 		unavailableServers: make([]*Server, 0),
-		healthCheck:        time.NewTicker(time.Minute),
+		healthCheck:        time.NewTicker(healthCheckInterval),
 	}
 	go lb.startHealthCheck() // 开启定时健康检查
 	return lb
@@ -135,14 +136,6 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 			return nil
 		})
 	}
-
-	//go func() {
-	//	_ = contextPool.Wait()
-	//	if _, ok := <-resultChan; !ok { // 如果通道已经关闭，直接返回
-	//		return
-	//	}
-	//	close(resultChan)
-	//}()
 
 	select {
 	case r := <-resultChan:
