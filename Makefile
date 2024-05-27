@@ -15,6 +15,15 @@ build-linux-arm64:
 	@mkdir -p build
 	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -gcflags "all=-N -l" -ldflags "-s -w" -o build/deeplx_linux_arm64 .
 
+build-mac-arm64:
+	@mkdir -p build
+	@CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 go build -gcflags "all=-N -l" -ldflags "-s -w" -o build/deeplx_mac_arm64 .
+
+build-win-arm64:
+	@mkdir -p build
+	@CGO_ENABLED=1 GOOS=windows GOARCH=arm64 go build -gcflags "all=-N -l" -ldflags "-s -w -H windowsgui" -o build/deeplx_win_arm64.exe .
+
+
 gox-linux:
 	gox -gcflags="all=-N -l" -ldflags "-s -w" -osarch="linux/amd64 linux/arm64" -output="build/deeplx_{{.OS}}_{{.Arch}}"
 
