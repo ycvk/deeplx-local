@@ -21,12 +21,14 @@ const (
 	healthCheckInterval = time.Minute
 )
 
+type TranslateService interface {
+	GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse
+}
+
 type Server struct {
-	URL           string
-	Weight        int64
-	CurrentWeight int64
-	isAvailable   bool
-	failureCount  int
+	URL          string
+	isAvailable  bool
+	failureCount int
 }
 
 type LoadBalancer struct {
@@ -41,7 +43,7 @@ type LoadBalancer struct {
 // NewLoadBalancer 负载均衡
 func NewLoadBalancer(vlist *[]string) TranslateService {
 	servers := lop.Map(*vlist, func(item string, index int) *Server {
-		return &Server{URL: item, Weight: 1, CurrentWeight: 1, isAvailable: true}
+		return &Server{URL: item, isAvailable: true}
 	})
 	lb := &LoadBalancer{
 		Servers:            servers,
