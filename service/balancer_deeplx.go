@@ -166,14 +166,14 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 }
 
 func (lb *LoadBalancer) getServer() *Server {
-	index := atomic.AddUint32(&lb.index, 1) - 1
-	server := lb.Servers[index%uint32(len(lb.Servers))]
-
-	for !server.isAvailable {
-		index = atomic.AddUint32(&lb.index, 1) - 1
-		server = lb.Servers[index%uint32(len(lb.Servers))]
+	var index uint32
+	for {
+		index = atomic.LoadUint32(&lb.index)
+		server := lb.Servers[index%uint32(len(lb.Servers))]
+		if server.isAvailable && atomic.CompareAndSwapUint32(&lb.index, index, index+1) {
+			return server
+		}
 	}
-	return server
 }
 
 func (lb *LoadBalancer) startHealthCheck() {
