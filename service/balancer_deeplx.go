@@ -11,6 +11,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -20,6 +21,8 @@ const (
 	maxFailures         = 3 //最大健康检查错误次数
 	healthCheckInterval = time.Minute
 )
+
+var sentenceRe = regexp.MustCompile(`[^.!?。！？]+[.!?。！？]`) //还有一种方式是 [^.!?。！？\s]+[.!?。！？]?\s* 这样能分割得更细小，但感觉没必要
 
 type TranslateService interface {
 	GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse
@@ -33,7 +36,6 @@ type Server struct {
 
 type LoadBalancer struct {
 	Servers            []*Server
-	re                 *regexp.Regexp
 	client             *req.Client
 	index              uint32
 	unavailableServers []*Server    // 不可用的服务器
@@ -48,13 +50,25 @@ func NewLoadBalancer(vlist *[]string) TranslateService {
 	lb := &LoadBalancer{
 		Servers:            servers,
 		client:             req.NewClient().SetTimeout(2 * time.Second),
-		re:                 regexp.MustCompile(`[^.!?。！？]+[.!?。！？]`), //还有一种方式是 [^.!?。！？\s]+[.!?。！？]?\s* 这样能分割得更细小，但感觉没必要
 		unavailableServers: make([]*Server, 0),
 		healthCheck:        time.NewTicker(healthCheckInterval),
 	}
 	go lb.startHealthCheck() // 开启定时健康检查
 	return lb
 }
+
+var (
+	trReqPool = sync.Pool{
+		New: func() interface{} {
+			return &domain.TranslateRequest{}
+		},
+	}
+	trRespPool = sync.Pool{
+		New: func() interface{} {
+			return &domain.TranslateResponse{}
+		},
+	}
+)
 
 func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse {
 	text := trReq.Text
@@ -67,7 +81,7 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 	var textParts []string
 	var currentPart string
 
-	sentences := lb.re.FindAllString(text, -1)
+	sentences := sentenceRe.FindAllString(text, -1)
 
 	for _, sentence := range sentences {
 		if len(currentPart)+len(sentence) <= maxLength {
@@ -87,14 +101,17 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 
 	for _, part := range textParts {
 		s.Go(func() stream.Callback {
-			transReq := domain.TranslateRequest{
-				Text:       part,
-				SourceLang: trReq.SourceLang,
-				TargetLang: trReq.TargetLang,
-			}
-			res := lb.sendRequest(transReq)
+			transReq := trReqPool.Get().(*domain.TranslateRequest)
+			transReq.Text = part
+			transReq.SourceLang = trReq.SourceLang
+			transReq.TargetLang = trReq.TargetLang
+
+			res := lb.sendRequest(*transReq)
+			trReqPool.Put(transReq)
+
 			return func() {
 				results = append(results, res.Data)
+				trRespPool.Put(&res)
 			}
 		})
 	}
