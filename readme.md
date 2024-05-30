@@ -7,10 +7,10 @@
 翻译超大文本时，会自动做拆分并行翻译合并处理。
 
 ### 一键启动
-`docker run -itd -p 8080:62155 neccen/deeplx-local:latest`
+`docker run --pull=always -itd -p 8080:62155 neccen/deeplx-local:latest`
 
 
-翻译地址：`http://localhost:8080/translate`
+**翻译地址：**`http://localhost:8080/translate`
 
 ### 可选参数
 - `360_api_key`：[quake360](https://quake.360.net/quake/#/personal?tab=message)的api_key，可用于每日自动爬取更多的翻译接口。（有每日免费次数）
