@@ -109,7 +109,7 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.TranslateResponse {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancelFunc()
-	resultChan := make(chan domain.TranslateResponse, 5)
+	resultChan := make(chan domain.TranslateResponse, 1)
 
 	contextPool := pool.New().WithContext(ctx).WithMaxGoroutines(5)
 	for i := 0; i < 5; i++ {
@@ -128,8 +128,11 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 			response.Body.Close()
 
 			if trResult.Code == 200 && len(trResult.Data) > 0 {
-				resultChan <- trResult
-				cancelFunc()
+				select {
+				case resultChan <- trResult:
+					cancelFunc()
+				default:
+				}
 			} else {
 				server.isAvailable = false
 				lb.unavailableServers = append(lb.unavailableServers, server)
