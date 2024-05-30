@@ -11,6 +11,7 @@ import (
 	"log"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -21,17 +22,20 @@ const (
 	healthCheckInterval = time.Minute
 )
 
+var sentenceRe = regexp.MustCompile(`[^.!?。！？]+[.!?。！？]`) //还有一种方式是 [^.!?。！？\s]+[.!?。！？]?\s* 这样能分割得更细小，但感觉没必要
+
+type TranslateService interface {
+	GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse
+}
+
 type Server struct {
-	URL           string
-	Weight        int64
-	CurrentWeight int64
-	isAvailable   bool
-	failureCount  int
+	URL          string
+	isAvailable  bool
+	failureCount int
 }
 
 type LoadBalancer struct {
 	Servers            []*Server
-	re                 *regexp.Regexp
 	client             *req.Client
 	index              uint32
 	unavailableServers []*Server    // 不可用的服务器
@@ -41,18 +45,30 @@ type LoadBalancer struct {
 // NewLoadBalancer 负载均衡
 func NewLoadBalancer(vlist *[]string) TranslateService {
 	servers := lop.Map(*vlist, func(item string, index int) *Server {
-		return &Server{URL: item, Weight: 1, CurrentWeight: 1, isAvailable: true}
+		return &Server{URL: item, isAvailable: true}
 	})
 	lb := &LoadBalancer{
 		Servers:            servers,
 		client:             req.NewClient().SetTimeout(2 * time.Second),
-		re:                 regexp.MustCompile(`[^.!?。！？]+[.!?。！？]`), //还有一种方式是 [^.!?。！？\s]+[.!?。！？]?\s* 这样能分割得更细小，但感觉没必要
 		unavailableServers: make([]*Server, 0),
 		healthCheck:        time.NewTicker(healthCheckInterval),
 	}
 	go lb.startHealthCheck() // 开启定时健康检查
 	return lb
 }
+
+var (
+	trReqPool = sync.Pool{
+		New: func() interface{} {
+			return &domain.TranslateRequest{}
+		},
+	}
+	trRespPool = sync.Pool{
+		New: func() interface{} {
+			return &domain.TranslateResponse{}
+		},
+	}
+)
 
 func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse {
 	text := trReq.Text
@@ -65,7 +81,7 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 	var textParts []string
 	var currentPart string
 
-	sentences := lb.re.FindAllString(text, -1)
+	sentences := sentenceRe.FindAllString(text, -1)
 
 	for _, sentence := range sentences {
 		if len(currentPart)+len(sentence) <= maxLength {
@@ -85,14 +101,17 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 
 	for _, part := range textParts {
 		s.Go(func() stream.Callback {
-			transReq := domain.TranslateRequest{
-				Text:       part,
-				SourceLang: trReq.SourceLang,
-				TargetLang: trReq.TargetLang,
-			}
-			res := lb.sendRequest(transReq)
+			transReq := trReqPool.Get().(*domain.TranslateRequest)
+			transReq.Text = part
+			transReq.SourceLang = trReq.SourceLang
+			transReq.TargetLang = trReq.TargetLang
+
+			res := lb.sendRequest(*transReq)
+			trReqPool.Put(transReq)
+
 			return func() {
 				results = append(results, res.Data)
+				trRespPool.Put(&res)
 			}
 		})
 	}
@@ -108,7 +127,9 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.TranslateResponse {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancelFunc()
-	resultChan := make(chan domain.TranslateResponse, 5)
+
+	var once sync.Once
+	var result domain.TranslateResponse
 
 	contextPool := pool.New().WithContext(ctx).WithMaxGoroutines(5)
 	for i := 0; i < 5; i++ {
@@ -127,8 +148,10 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 			response.Body.Close()
 
 			if trResult.Code == 200 && len(trResult.Data) > 0 {
-				resultChan <- trResult
-				cancelFunc()
+				once.Do(func() {
+					result = trResult
+					cancelFunc()
+				})
 			} else {
 				server.isAvailable = false
 				lb.unavailableServers = append(lb.unavailableServers, server)
@@ -138,47 +161,43 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 	}
 
 	select {
-	case r := <-resultChan:
-		defer func() {
-			cancelFunc()
-			close(resultChan)
-		}()
-		return r
 	case <-ctx.Done():
-		close(resultChan)
-		log.Println("all requests failed")
+		return result
 	}
-	return domain.TranslateResponse{}
 }
 
 func (lb *LoadBalancer) getServer() *Server {
-	index := atomic.AddUint32(&lb.index, 1) - 1
-	server := lb.Servers[index%uint32(len(lb.Servers))]
-
-	for !server.isAvailable {
-		index = atomic.AddUint32(&lb.index, 1) - 1
-		server = lb.Servers[index%uint32(len(lb.Servers))]
+	for {
+		index := atomic.LoadUint32(&lb.index)
+		server := lb.Servers[index%uint32(len(lb.Servers))]
+		if server.isAvailable && atomic.CompareAndSwapUint32(&lb.index, index, index+1) {
+			return server
+		}
 	}
-	return server
 }
 
 func (lb *LoadBalancer) startHealthCheck() {
-	for range lb.healthCheck.C {
-		for i := 0; i < len(lb.unavailableServers); i++ {
-			server := lb.unavailableServers[i]
-			flag, _ := pkg.CheckURLAvailability(lb.client, server.URL)
-			if flag {
-				server.isAvailable = true
-				server.failureCount = 0
-				copy(lb.unavailableServers[i:], lb.unavailableServers[i+1:])
-				lb.unavailableServers = lb.unavailableServers[:len(lb.unavailableServers)-1]
-				i--
-			} else {
-				server.failureCount++
-				if server.failureCount >= maxFailures {
+	for {
+		select {
+		case <-lb.healthCheck.C:
+			for i := 0; i < len(lb.unavailableServers); i++ {
+				server := lb.unavailableServers[i]
+				flag, _ := pkg.CheckURLAvailability(lb.client, server.URL)
+				if flag {
+					server.isAvailable = true
+					server.failureCount = 0
 					copy(lb.unavailableServers[i:], lb.unavailableServers[i+1:])
 					lb.unavailableServers = lb.unavailableServers[:len(lb.unavailableServers)-1]
 					i--
+					log.Printf("Server %s is available now", server.URL)
+				} else {
+					server.failureCount++
+					if server.failureCount >= maxFailures {
+						copy(lb.unavailableServers[i:], lb.unavailableServers[i+1:])
+						lb.unavailableServers = lb.unavailableServers[:len(lb.unavailableServers)-1]
+						i--
+						log.Printf("Server %s is removed due to max failures", server.URL)
+					}
 				}
 			}
 		}
