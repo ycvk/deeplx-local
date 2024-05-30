@@ -1,7 +1,6 @@
 # 使用适合Go应用的基础镜像
 FROM golang:1.22-alpine as builder
-RUN apk update && apk add --no-cache upx && rm -rf /var/cache/apk/*
-RUN apk add make
+RUN apk update && apk add --no-cache upx make && rm -rf /var/cache/apk/*
 
 # 设置工作目录
 WORKDIR /app

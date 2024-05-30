@@ -24,7 +24,6 @@ func initServer() {
 	// 注册服务
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
-	//lxService := service.NewDeepLXService(&urLs)
 	balancerService := service.NewLoadBalancer(&urLs)
 	lxHandler := web.NewDeepLXHandler(balancerService)
 	lxHandler.RegisterRoutes(r)
