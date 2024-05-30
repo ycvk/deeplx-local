@@ -8,6 +8,7 @@ import (
 	lop "github.com/samber/lo/parallel"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/sourcegraph/conc/stream"
+	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -166,9 +167,8 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 }
 
 func (lb *LoadBalancer) getServer() *Server {
-	var index uint32
 	for {
-		index = atomic.LoadUint32(&lb.index)
+		index := atomic.LoadUint32(&lb.index)
 		server := lb.Servers[index%uint32(len(lb.Servers))]
 		if server.isAvailable && atomic.CompareAndSwapUint32(&lb.index, index, index+1) {
 			return server
@@ -177,22 +177,27 @@ func (lb *LoadBalancer) getServer() *Server {
 }
 
 func (lb *LoadBalancer) startHealthCheck() {
-	for range lb.healthCheck.C {
-		for i := 0; i < len(lb.unavailableServers); i++ {
-			server := lb.unavailableServers[i]
-			flag, _ := pkg.CheckURLAvailability(lb.client, server.URL)
-			if flag {
-				server.isAvailable = true
-				server.failureCount = 0
-				copy(lb.unavailableServers[i:], lb.unavailableServers[i+1:])
-				lb.unavailableServers = lb.unavailableServers[:len(lb.unavailableServers)-1]
-				i--
-			} else {
-				server.failureCount++
-				if server.failureCount >= maxFailures {
+	for {
+		select {
+		case <-lb.healthCheck.C:
+			for i := 0; i < len(lb.unavailableServers); i++ {
+				server := lb.unavailableServers[i]
+				flag, _ := pkg.CheckURLAvailability(lb.client, server.URL)
+				if flag {
+					server.isAvailable = true
+					server.failureCount = 0
 					copy(lb.unavailableServers[i:], lb.unavailableServers[i+1:])
 					lb.unavailableServers = lb.unavailableServers[:len(lb.unavailableServers)-1]
 					i--
+					log.Printf("Server %s is available now", server.URL)
+				} else {
+					server.failureCount++
+					if server.failureCount >= maxFailures {
+						copy(lb.unavailableServers[i:], lb.unavailableServers[i+1:])
+						lb.unavailableServers = lb.unavailableServers[:len(lb.unavailableServers)-1]
+						i--
+						log.Printf("Server %s is removed due to max failures", server.URL)
+					}
 				}
 			}
 		}
