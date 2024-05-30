@@ -8,7 +8,6 @@ import (
 	lop "github.com/samber/lo/parallel"
 	"github.com/sourcegraph/conc/pool"
 	"github.com/sourcegraph/conc/stream"
-	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -127,7 +126,9 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.TranslateResponse {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancelFunc()
-	resultChan := make(chan domain.TranslateResponse, 5)
+
+	var once sync.Once
+	var result domain.TranslateResponse
 
 	contextPool := pool.New().WithContext(ctx).WithMaxGoroutines(5)
 	for i := 0; i < 5; i++ {
@@ -146,8 +147,10 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 			response.Body.Close()
 
 			if trResult.Code == 200 && len(trResult.Data) > 0 {
-				resultChan <- trResult
-				cancelFunc()
+				once.Do(func() {
+					result = trResult
+					cancelFunc()
+				})
 			} else {
 				server.isAvailable = false
 				lb.unavailableServers = append(lb.unavailableServers, server)
@@ -157,17 +160,9 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 	}
 
 	select {
-	case r := <-resultChan:
-		defer func() {
-			cancelFunc()
-			close(resultChan)
-		}()
-		return r
 	case <-ctx.Done():
-		close(resultChan)
-		log.Println("all requests failed")
+		return result
 	}
-	return domain.TranslateResponse{}
 }
 
 func (lb *LoadBalancer) getServer() *Server {
