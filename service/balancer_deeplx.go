@@ -11,7 +11,6 @@ import (
 	"log"
 	"regexp"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -57,19 +56,6 @@ func NewLoadBalancer(vlist *[]string) TranslateService {
 	return lb
 }
 
-var (
-	trReqPool = sync.Pool{
-		New: func() interface{} {
-			return &domain.TranslateRequest{}
-		},
-	}
-	trRespPool = sync.Pool{
-		New: func() interface{} {
-			return &domain.TranslateResponse{}
-		},
-	}
-)
-
 func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.TranslateResponse {
 	text := trReq.Text
 	textLength := len(text)
@@ -101,17 +87,13 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 
 	for _, part := range textParts {
 		s.Go(func() stream.Callback {
-			transReq := trReqPool.Get().(*domain.TranslateRequest)
-			transReq.Text = part
-			transReq.SourceLang = trReq.SourceLang
-			transReq.TargetLang = trReq.TargetLang
-
-			res := lb.sendRequest(*transReq)
-			trReqPool.Put(transReq)
-
+			res := lb.sendRequest(domain.TranslateRequest{
+				Text:       part,
+				SourceLang: trReq.SourceLang,
+				TargetLang: trReq.TargetLang,
+			})
 			return func() {
 				results = append(results, res.Data)
-				trRespPool.Put(&res)
 			}
 		})
 	}
@@ -127,9 +109,7 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.TranslateResponse {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancelFunc()
-
-	var once sync.Once
-	var result domain.TranslateResponse
+	resultChan := make(chan domain.TranslateResponse, 5)
 
 	contextPool := pool.New().WithContext(ctx).WithMaxGoroutines(5)
 	for i := 0; i < 5; i++ {
@@ -148,10 +128,8 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 			response.Body.Close()
 
 			if trResult.Code == 200 && len(trResult.Data) > 0 {
-				once.Do(func() {
-					result = trResult
-					cancelFunc()
-				})
+				resultChan <- trResult
+				cancelFunc()
 			} else {
 				server.isAvailable = false
 				lb.unavailableServers = append(lb.unavailableServers, server)
@@ -161,19 +139,22 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 	}
 
 	select {
-	case <-ctx.Done():
+	case result := <-resultChan:
 		return result
+	case <-ctx.Done():
+		return domain.TranslateResponse{}
 	}
 }
 
 func (lb *LoadBalancer) getServer() *Server {
-	for {
-		index := atomic.LoadUint32(&lb.index)
-		server := lb.Servers[index%uint32(len(lb.Servers))]
-		if server.isAvailable && atomic.CompareAndSwapUint32(&lb.index, index, index+1) {
-			return server
-		}
+	index := atomic.AddUint32(&lb.index, 1) - 1
+	server := lb.Servers[index%uint32(len(lb.Servers))]
+
+	for !server.isAvailable {
+		index = atomic.AddUint32(&lb.index, 1) - 1
+		server = lb.Servers[index%uint32(len(lb.Servers))]
 	}
+	return server
 }
 
 func (lb *LoadBalancer) startHealthCheck() {

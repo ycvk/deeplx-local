@@ -16,7 +16,7 @@ RUN go mod tidy
 RUN make build-all
 RUN upx -6 build/deeplx_linux_*
 
-FROM alpine as final
+FROM scratch as final
 ARG TARGETOS
 ARG TARGETARCH
 WORKDIR /usr/local/bin/
