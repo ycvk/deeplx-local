@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"deeplx-local/domain"
 	"deeplx-local/pkg"
@@ -65,21 +66,22 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 	}
 
 	var textParts []string
-	var currentPart string
+	var currentPart bytes.Buffer
 
 	sentences := sentenceRe.FindAllString(text, -1)
 
 	for _, sentence := range sentences {
-		if len(currentPart)+len(sentence) <= maxLength {
-			currentPart += sentence
+		if currentPart.Len()+len(sentence) <= maxLength {
+			currentPart.WriteString(sentence)
 		} else {
-			textParts = append(textParts, currentPart)
-			currentPart = sentence
+			textParts = append(textParts, currentPart.String())
+			currentPart.Reset()
+			currentPart.WriteString(sentence)
 		}
 	}
 
-	if currentPart != "" {
-		textParts = append(textParts, currentPart)
+	if currentPart.Len() > 0 {
+		textParts = append(textParts, currentPart.String())
 	}
 
 	var results = make([]string, 0, len(textParts))
@@ -109,7 +111,7 @@ func (lb *LoadBalancer) GetTranslateData(trReq domain.TranslateRequest) domain.T
 func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.TranslateResponse {
 	ctx, cancelFunc := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancelFunc()
-	resultChan := make(chan domain.TranslateResponse, 5)
+	resultChan := make(chan domain.TranslateResponse, 1)
 
 	contextPool := pool.New().WithContext(ctx).WithMaxGoroutines(5)
 	for i := 0; i < 5; i++ {
@@ -128,8 +130,11 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 			response.Body.Close()
 
 			if trResult.Code == 200 && len(trResult.Data) > 0 {
-				resultChan <- trResult
-				cancelFunc()
+				select {
+				case resultChan <- trResult:
+					cancelFunc()
+				default:
+				}
 			} else {
 				server.isAvailable = false
 				lb.unavailableServers = append(lb.unavailableServers, server)
