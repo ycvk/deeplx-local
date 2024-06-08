@@ -79,18 +79,25 @@ func getValidURLs() []string {
 	// 保存处理后的URL
 	writeFileReplace(urlPath, urls)
 
-	validList := make([]string, 0, len(urls))
+	validChan := make(chan string, len(urls))
 
 	// 并发检查URL可用性
 	p := pool.New().WithMaxGoroutines(30)
 	for _, url := range urls {
+		url := url // 创建一个新的变量，避免闭包中的变量复用
 		p.Go(func() {
 			if availability, err := pkg.CheckURLAvailability(client, url); err == nil && availability {
-				validList = append(validList, url)
+				validChan <- url
 			}
 		})
 	}
 	p.Wait()
+	close(validChan)
+
+	validList := make([]string, 0, len(validChan))
+	for url := range validChan {
+		validList = append(validList, url)
+	}
 
 	log.Printf("available urls count: %d\n", len(validList))
 	return validList
