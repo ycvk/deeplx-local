@@ -100,6 +100,10 @@ func getValidURLs() []string {
 	}
 
 	log.Printf("available urls count: %d\n", len(validList))
+
+	if len(validList) == 0 {
+		log.Fatalln("available urls is empty")
+	}
 	return validList
 }
 

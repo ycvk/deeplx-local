@@ -113,7 +113,7 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 	defer cancelFunc()
 	resultChan := make(chan domain.TranslateResponse, 1)
 
-	contextPool := pool.New().WithContext(ctx).WithMaxGoroutines(5)
+	contextPool := pool.New().WithContext(ctx).WithMaxGoroutines(min(len(lb.Servers), 5))
 	for i := 0; i < 5; i++ {
 		contextPool.Go(func(ctx context.Context) error {
 			server := lb.getServer()
@@ -133,6 +133,8 @@ func (lb *LoadBalancer) sendRequest(trReq domain.TranslateRequest) domain.Transl
 				select {
 				case resultChan <- trResult:
 					cancelFunc()
+				case <-ctx.Done():
+					return nil
 				default:
 				}
 			} else {
