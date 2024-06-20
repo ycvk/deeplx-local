@@ -28,6 +28,7 @@ var (
 	client      = req.NewClient().SetTimeout(3 * time.Second)
 	hunterKey   = os.Getenv("hunter_api_key")
 	quakeKey    = os.Getenv("360_api_key")
+	routePath   = os.Getenv("route")
 	scanService service.ScanService
 )
 
