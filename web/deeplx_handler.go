@@ -8,11 +8,18 @@ import (
 )
 
 type DeepLXHandler struct {
-	service service.TranslateService
+	service   service.TranslateService
+	routePath string
 }
 
-func NewDeepLXHandler(service service.TranslateService) *DeepLXHandler {
-	return &DeepLXHandler{service: service}
+func NewDeepLXHandler(service service.TranslateService, customRoute string) *DeepLXHandler {
+	if customRoute == "" {
+		customRoute = "/translate"
+	}
+	if customRoute[0] != '/' {
+		customRoute = "/" + customRoute
+	}
+	return &DeepLXHandler{service: service, routePath: customRoute}
 }
 
 func (d *DeepLXHandler) Translate(c *gin.Context) {
@@ -27,5 +34,5 @@ func (d *DeepLXHandler) Translate(c *gin.Context) {
 }
 
 func (d *DeepLXHandler) RegisterRoutes(engine *gin.Engine) {
-	engine.POST("/translate", d.Translate)
+	engine.POST(d.routePath, d.Translate)
 }
