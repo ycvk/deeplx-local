@@ -25,7 +25,7 @@ func initServer() {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	balancerService := service.NewLoadBalancer(&urLs)
-	lxHandler := web.NewDeepLXHandler(balancerService)
+	lxHandler := web.NewDeepLXHandler(balancerService, routePath)
 	lxHandler.RegisterRoutes(r)
 
 	go func() {
