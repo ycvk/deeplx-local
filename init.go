@@ -47,7 +47,7 @@ func readFile(filename string) ([]byte, error) {
 	}
 
 	// file exist, read it
-	content, err := os.ReadFile(urlPath)
+	content, err := os.ReadFile(filename)
 	if err != nil {
 		log.Fatal(err)
 	}
