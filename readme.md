@@ -76,3 +76,50 @@ services:
 ### Bob翻译插件
 看到有人提问Bob如何用上此翻译，我手撸了一个，
 配套的Bob翻译插件请看 [ycvk/deeplx-local-bobplugin: 用于自建deeplx服务的bob翻译插件](https://github.com/ycvk/deeplx-local-bobplugin)
+
+### 自行抓取url方法
+
+目前网络上的自建deepl服务有很多，我列举几个开源项目：
+- [OwO-Network/DeepLX: DeepL Free API (No TOKEN required)](https://github.com/OwO-Network/DeepLX)
+- [xiaozhou26/deeplx-pro](https://github.com/xiaozhou26/deeplx-pro/tree/main)
+- [ifyour/deeplx-for-cloudflare: 🔥 Deploy DeepLX on Cloudflare](https://github.com/ifyour/deeplx-for-cloudflare)
+
+1. 分析前者的代码可以发现，它暴露了一个根路径的 `get` 接口，返回固定的响应：
+```json
+{ 
+  "code": 200, 
+  "message": "DeepL Free API, Developed by sjlleo and missuo. Go to /translate with POST. http://github.com/OwO-Network/DeepLX"
+}
+```
+以此可以通过各种测绘工具通过这个特征去抓取使用此服务搭建的翻译接口。
+
+以fofa搜索为例，搜索框输入：
+```
+body='{"code":200,"message":"DeepL Free API, Developed by sjlleo and missuo. Go to /translate with POST. http://github.com/OwO-Network/DeepLX"}'
+```
+原项目代码如下：
+
+https://github.com/OwO-Network/DeepLX/blob/93a3204eab4366b467ac6e2672b0f6186d435837/main.go#L78-L83
+
+2. 同理，分析后者的代码可以发现，它同样暴露了一个根路径的 `get` 接口，返回固定的响应：
+```
+Welcome to deeplx-pro
+```
+以此可以通过各种测绘工具通过这个特征去抓取使用此服务搭建的翻译接口。
+
+以quake搜索为例，搜索框输入：
+```
+response:"Welcome to deeplx-pro"
+```
+原项目代码如下：
+
+https://github.com/xiaozhou26/deeplx-pro/blob/70fc070b21d14b136c69ac172a8e060fc547ed9b/server.js#L11-L13
+
+
+3. 也一样
+```
+{
+"code": 200,
+"message": "Free translation API, Use POST method to access /translate."
+}
+```
